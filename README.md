@@ -20,8 +20,6 @@ These datasets are from an official github of "Future Frame Prediction for Anoma
 
 Download the datasets into ``dataset`` folder, like ``./dataset/ped2/``
 
-## Update
-* 02/04/21: We uploaded the codes based on reconstruction method, and pretrained wieghts for Ped2 reconstruction, Avenue prediction and Avenue reconstruction.
 
 
 ## Training
