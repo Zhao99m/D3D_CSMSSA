@@ -39,14 +39,8 @@ python Train.py --gpus 1 --dataset_path 'your_dataset_directory' --dataset_type 
 
 ```bash
 python Evaluate.py --dataset_type ped2 --model_dir your_model.pth --m_items_dir your_m_items.pt
-```
-* For the reconstruction task, you need to set the parameters as
-```bash
-python Evaluate.py --method recon --t_length 1 --alpha 0.7 --th 0.015 --dataset_type ped2 --model_dir your_model.pth --m_items_dir your_m_items.pt
-```
-* Test the model with our pre-trained model and memory items
-```bash
-python Evaluate.py --dataset_type ped2 --model_dir pretrained_model.pth --m_items_dir m_items.pt
+
+
 ```
 
 
