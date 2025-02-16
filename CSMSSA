@@ -1,0 +1,106 @@
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+from torchvision.models.video import r3d_50
+from mmcv.ops import DeformConv3d
+
+class MultiScaleSelfAttention(nn.Module):
+    def __init__(self, in_channels, reduction_ratio=8):
+        super(MultiScaleSelfAttention, self).__init__()
+        self.in_channels = in_channels
+        self.reduction_ratio = reduction_ratio
+
+        
+        self.pool1 = nn.AdaptiveAvgPool3d(1)
+        self.pool2 = nn.AdaptiveAvgPool3d(2)
+        self.pool3 = nn.AdaptiveAvgPool3d(3)
+
+        
+        self.mlp = nn.Sequential(
+            nn.Linear(in_channels * (1 + 4 + 9), in_channels // reduction_ratio),
+            nn.ReLU(inplace=True),
+            nn.Linear(in_channels // reduction_ratio, in_channels),
+            nn.Sigmoid()
+        )
+
+    def forward(self, x):
+        b, c, d, h, w = x.shape
+
+        # Multi-scale pooling
+        scale1 = self.pool1(x).view(b, c)  # (b, c)
+        scale2 = self.pool2(x).view(b, c * 4)  # (b, c * 4)
+        scale3 = self.pool3(x).view(b, c * 9)  # (b, c * 9)
+
+        # Concatenate multi-scale features
+        multi_scale_feat = torch.cat([scale1, scale2, scale3], dim=1)  # (b, c * (1 + 4 + 9))
+
+        # Compute attention weights
+        attention_weights = self.mlp(multi_scale_feat).view(b, c, 1, 1, 1)  # (b, c, 1, 1, 1)
+
+        # Apply attention weights to input
+        return x * attention_weights
+
+class DeformableResNextI3D(nn.Module):
+    def __init__(self, num_classes, pretrained=True):
+        super(DeformableResNextI3D, self).__init__()
+        
+        self.resnext = r3d_50(pretrained=pretrained)
+        
+        self.replace_conv_with_deform_conv(self.resnext)
+        
+        self.resnext.fc = nn.Linear(self.resnext.fc.in_features, num_classes)
+
+        
+        self.attention1 = MultiScaleSelfAttention(256)  # layer1 output channels
+        self.attention2 = MultiScaleSelfAttention(512)  # layer2 output channels
+        self.attention3 = MultiScaleSelfAttention(1024)  # layer3 output channels
+        self.attention4 = MultiScaleSelfAttention(2048)  # layer4 output channels
+    
+    def replace_conv_with_deform_conv(self, model):
+        for name, module in model.named_children():
+            if isinstance(module, nn.Conv3d):
+                if isinstance(list(model.children())[-1], nn.Conv3d):
+                    if "layer1" in name:
+                        stride = (1, 2, 2)
+                        padding = (0, 0, 0)
+                    elif "layer2" in name or "layer3" in name or "layer4" in name:
+                        stride = (3, 2, 2)
+                        padding = (1, 0, 0)
+                    else:
+                        continue
+                    
+                    deform_conv = DeformConv3d(
+                        in_channels=module.in_channels,
+                        out_channels=module.out_channels,
+                        kernel_size=module.kernel_size,
+                        stride=stride,
+                        padding=padding,
+                        bias=True if module.bias is not None else False
+                    )
+                    setattr(model, name, deform_conv)
+            else:
+                self.replace_conv_with_deform_conv(module)
+    
+    def forward(self, x):
+        
+        x = self.resnext.stem(x)  # Initial stem convolution
+
+        x1 = self.resnext.layer1(x)  # layer1 output
+        x1 = self.attention1(x1)  # Apply multi-scale self-attention
+
+        x2 = self.resnext.layer2(x1)  # layer2 output
+        x2 = self.attention2(x2)  # Apply multi-scale self-attention
+
+        x3 = self.resnext.layer3(x2)  # layer3 output
+        x3 = self.attention3(x3)  # Apply multi-scale self-attention
+
+        x4 = self.resnext.layer4(x3)  # layer4 output
+        x4 = self.attention4(x4)  # Apply multi-scale self-attention
+
+        
+        x = F.adaptive_avg_pool3d(x4, (1, 1, 1))
+        x = torch.flatten(x, 1)
+        x = self.resnext.fc(x)
+
+        return x, [x1, x2, x3, x4]  # Return output and feature maps
+
