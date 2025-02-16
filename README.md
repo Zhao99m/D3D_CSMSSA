@@ -43,10 +43,4 @@ python Evaluate.py --dataset_type ped2 --model_dir your_model.pth --m_items_dir 
 
 ```
 
-
-  author={Park, Hyunjong and Noh, Jongyoun and Ham, Bumsub},
-  booktitle={Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition},
-  pages={14372--14381},
-  year={2020}
-}
 ```
