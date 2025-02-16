@@ -112,35 +112,7 @@ loss_func_mse = nn.MSELoss(reduction='none')
 
 # Training
 
-class DeformConv3dOffsetGenerator(nn.Module):
-    def __init__(self, in_channels, out_channels, kernel_size=(3, 3, 3), stride=(1, 1, 1), padding=(1, 1, 1)):
-        super(DeformConv3dOffsetGenerator, self).__init__()
-        self.conv = nn.Conv3d(in_channels, 3 * kernel_size[0] * kernel_size[1] * kernel_size[2],
-                              kernel_size=kernel_size, stride=stride, padding=padding)
 
-    def forward(self, x):
-        offset = self.conv(x)
-        return offset
-
-
-
-class DeformConv3d(nn.Module):
-    def __init__(self, in_channels, out_channels, kernel_size=(3, 3, 3), stride=(1, 1, 1),
-                 padding=(1, 1, 1), dilation=(1, 1, 1), groups=1, deformable_groups=1):
-        super(DeformConv3d, self).__init__()
-        self.offset_generator = DeformConv3dOffsetGenerator(in_channels, out_channels, kernel_size,
-                                                             stride, padding)
-        self.conv = nn.Conv3d(in_channels, out_channels, kernel_size, stride, padding, dilation, groups)
-        self.deformable_groups = deformable_groups
-
-    def forward(self, x):
-        offset = self.offset_generator(x)
-        x = F.deform_conv3d(x, offset, self.conv.weight, self.conv.bias, self.conv.stride,
-                            self.conv.padding, self.conv.dilation, self.deformable_groups)
-        return x
-
-
-m_items = F.normalize(torch.rand((args.msize, args.mdim), dtype=torch.float), dim=1).cuda() # Initialize the memory items
 
 for epoch in range(args.epochs):
     labels_list = []
